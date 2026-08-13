@@ -1,0 +1,3 @@
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+export const materials=sqliteTable("materials",{id:integer("id").primaryKey({autoIncrement:true}),songKey:text("song_key").notNull(),songTitle:text("song_title").notNull(),kind:text("kind").notNull(),label:text("label").notNull(),url:text("url"),objectKey:text("object_key"),contentType:text("content_type"),createdAt:text("created_at").notNull()});
+export const reminderLog=sqliteTable("reminder_log",{id:integer("id").primaryKey({autoIncrement:true}),serviceId:text("service_id").notNull(),recipient:text("recipient").notNull(),window:text("window").notNull(),channel:text("channel").notNull(),sentAt:text("sent_at").notNull()});
