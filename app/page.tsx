@@ -1,28 +1,1043 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-type Service={id:string;date:string;day:number;monthLabel:string;label:string;time:string;arrival:string;arrivalLabel:string;audiovisual:string;singers:string;instruments:string;songs:string[];note?:string};
-type Month={key:string;label:string;services:Service[]}; type Material={id:number;songKey:string;songTitle:string;kind:string;label:string;url?:string;createdAt:string}; type Profile={name:string;photoUrl?:string};
-const PILOT="PHK"; const normalize=(v:string)=>v.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim();
-const isMine=(s:Service,p:string)=>{const h=normalize(`${s.audiovisual} / ${s.singers} / ${s.instruments}`);const n=normalize(p).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");return new RegExp(`(^|[^A-Z0-9])${n}([^A-Z0-9]|$)`).test(h)};
-export default function Home(){
- const[tab,setTab]=useState<"scale"|"materials"|"profile">("scale"),[months,setMonths]=useState<Month[]>([]),[monthKey,setMonthKey]=useState(""),[selected,setSelected]=useState(PILOT),[search,setSearch]=useState(""),[materials,setMaterials]=useState<Material[]>([]),[profiles,setProfiles]=useState<Profile[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[editingSong,setEditingSong]=useState<string|null>(null),[notice,setNotice]=useState(""),[installPrompt,setInstallPrompt]=useState<any>(null),[accepted,setAccepted]=useState<boolean|null>(null),[openProfile,setOpenProfile]=useState<string|null>(null);
- useEffect(()=>{const saved=localStorage.getItem("escala-jb-person");if(saved)setSelected(saved);setAccepted(localStorage.getItem("escala-jb-terms")==="1");const onInstall=(e:any)=>{e.preventDefault();setInstallPrompt(e)};window.addEventListener("beforeinstallprompt",onInstall);Promise.all([fetch("/api/schedule").then(r=>r.ok?r.json():Promise.reject()),fetch("/api/materials").then(r=>r.ok?r.json():({materials:[]})).catch(()=>({materials:[]})),fetch("/api/profiles").then(r=>r.ok?r.json():({profiles:[]})).catch(()=>({profiles:[]}))]) .then(([d,m,p])=>{setMonths(d.months||[]);setMonthKey(d.defaultMonth||d.months?.[0]?.key||"");setMaterials(m.materials||[]);setProfiles(p.profiles||[])}) .catch(()=>setError("Não foi possível atualizar a escala agora. Tente novamente em instantes.")) .finally(()=>setLoading(false));return()=>window.removeEventListener("beforeinstallprompt",onInstall)},[]);
- const month=months.find(m=>m.key===monthKey)||months[0],services=month?.services||[],mine=useMemo(()=>services.filter(s=>isMine(s,selected)),[services,selected]);
- const songs=useMemo(()=>{const map=new Map<string,{title:string;count:number}>();months.forEach(m=>m.services.forEach(s=>s.songs.forEach(title=>{const clean=title.replace(/^\d+\s*-\s*/,"").trim(),key=normalize(clean);if(!key||key.includes("NAO HAVERA")||key.includes("JA EIC"))return;map.set(key,{title:clean,count:(map.get(key)?.count||0)+1})})));return[...map.entries()].filter(([,s])=>!search||normalize(s.title).includes(normalize(search))).sort((a,b)=>a[1].title.localeCompare(b[1].title,"pt-BR"))},[months,search]);
- const people=useMemo(()=>{const set=new Set<string>([PILOT]);months.forEach(m=>m.services.forEach(s=>[s.audiovisual,s.singers,s.instruments].forEach(v=>v.split("/").map(x=>x.trim()).filter(x=>x&&x!=="-").forEach(x=>set.add(x)))));return [...set].sort((a,b)=>a.localeCompare(b,"pt-BR"))},[months]);
- const choose=(p:string)=>{setSelected(p);localStorage.setItem("escala-jb-person",p)},enableNotifications=async()=>{if(!("Notification"in window)){setNotice("Este navegador não oferece notificações.");return}const r=await Notification.requestPermission();setNotice(r==="granted"?"Notificações autorizadas neste aparelho.":"Permissão de notificações não concedida.")},refreshMaterials=()=>fetch("/api/materials").then(r=>r.json()).then(d=>setMaterials(d.materials||[])),refreshProfiles=()=>fetch("/api/profiles").then(r=>r.json()).then(d=>setProfiles(d.profiles||[]));
- const acceptTerms=async()=>{localStorage.setItem("escala-jb-terms","1");setAccepted(true);await fetch("/api/consent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({profile:selected,version:"1.0"})}).catch(()=>{})};
- const install=async()=>{if(installPrompt){await installPrompt.prompt();setInstallPrompt(null)}else setNotice("No iPhone: Safari › Compartilhar › Adicionar à Tela de Início. No Android: Chrome › menu ⋮ › Instalar aplicativo.")};
- return <main><header className="topbar"><div className="brand"><span>♫</span><div><strong>Escala de Música JB</strong><small>IASD Jardim Brasil</small></div></div><button className="bell" onClick={enableNotifications} aria-label="Ativar notificações">●</button></header>
- <section className="intro"><div><p className="eyebrow">{tab==="materials"?"BIBLIOTECA PERMANENTE":month?.label||"ESCALA OFICIAL"}</p><h1>{tab==="scale"?`Olá, ${selected}!`:tab==="materials"?"Materiais":"Meu perfil"}</h1><p>{tab==="scale"?"Veja a escala completa. Seus dias estão destacados em azul.":tab==="materials"?"Vídeos, cifras, fotos e partituras organizados por música.":"Identificação e preferências do piloto de alertas."}</p></div>{tab==="scale"&&<div className="intro-controls"><label>Mês<select value={monthKey} onChange={e=>setMonthKey(e.target.value)}>{months.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select></label><label>Quem está consultando?<select value={selected} onChange={e=>choose(e.target.value)}>{people.map(p=><option key={p}>{p}</option>)}</select></label></div>}</section>
- {loading&&<section className="content"><p className="empty-state">Atualizando a planilha oficial…</p></section>}{error&&<section className="content"><p className="error-state">{error}</p></section>}
- {!loading&&!error&&tab==="scale"&&<><section className="summary"><div><strong>{mine.length}</strong><span>programações para você</span></div><div><strong>{services.length}</strong><span>programações no mês</span></div><div><strong>2</strong><span>lembretes por escala</span></div></section><section className="content"><div className="section-title"><div><p className="eyebrow">ESCALA OFICIAL</p><h2>Todas as programações</h2></div><span className="legend"><i/> Sua escala</span></div><div className="calendar">{services.map(s=><ServiceCard key={s.id} service={s} selected={selected} materials={materials} profiles={profiles} onProfile={setOpenProfile}/>)}</div><p className="source-note">Atualização automática a partir da planilha oficial.</p></section></>}
- {tab==="materials"&&<section className="content"><div className="materials-toolbar"><label htmlFor="search">Buscar uma música</label><input id="search" type="search" placeholder="Ex.: Bondade de Deus" value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="materials-note"><span>♪</span><div><strong>Uma música, um único cadastro</strong><p>O material continua disponível mesmo quando a música volta em outro mês.</p></div></div><div className="materials-grid">{songs.map(([key,song])=>{const linked=materials.filter(m=>m.songKey===key),youtube=linked.find(m=>m.kind==="youtube");return <article className="material-card" key={key}><div className="material-icon">♫</div><div className="material-body"><h3>{song.title}</h3><p>{song.count>1?`Aparece ${song.count} vezes nas escalas disponíveis`:"Presente na escala"}</p>{youtube&&<a className="play-button" href={youtube.url} target="_blank" rel="noreferrer">▶ Tocar no YouTube</a>}{linked.length?<div className="material-links">{linked.filter(m=>m.id!==youtube?.id).map(m=><span className="material-link" key={m.id}><a href={m.kind==="file"?`/api/materials/file?id=${m.id}`:m.url} target="_blank" rel="noreferrer">{m.label}</a><button aria-label={`Remover ${m.label}`} onClick={async()=>{if(confirm("Remover este material?")){await fetch(`/api/materials?id=${m.id}`,{method:"DELETE"});refreshMaterials()}}}>×</button></span>)}</div>:<span className="material-status">Aguardando material</span>}<button className="add-material" onClick={()=>setEditingSong(key)}>+ Adicionar material</button>{editingSong===key&&<MaterialForm songKey={key} songTitle={song.title} onDone={()=>{setEditingSong(null);refreshMaterials()}} onCancel={()=>setEditingSong(null)}/>}</div></article>})}</div></section>}
- {tab==="profile"&&<section className="content"><article className="profile-card"><ProfileAvatar name={selected} profiles={profiles}/><div><p className="eyebrow">PERFIL SELECIONADO</p><h2>{selected}</h2><p>{selected===PILOT?"Músico / Sonoplastia":"Participante da equipe de música"}</p></div></article><ProfilePhotoForm name={selected} onDone={refreshProfiles}/><div className="profile-grid"><article><h3>WhatsApp</h3><p>{selected===PILOT?"••••• ••••-7368":"Ainda não cadastrado"}</p><small>O número não fica visível aos demais usuários.</small></article><article><h3>Lembretes</h3><p>24 horas e 2 horas antes</p><small>Incluem culto, chegada, função, músicas e materiais.</small></article><article><h3>Notificações</h3><p>Este aparelho</p><button className="primary" onClick={enableNotifications}>Ativar notificações</button></article></div>{notice&&<p className="success-state">{notice}</p>}<div className="install-card"><h3>Instalar no celular</h3><div className="install-options"><div><strong>iPhone / iPad</strong><p>Abra no Safari, toque em Compartilhar e escolha “Adicionar à Tela de Início”. A Apple exige esses toques e não permite instalação automática por link.</p></div><div><strong>Android</strong><p>Abra no Chrome e toque em “Instalar aplicativo”. Se o botão não aparecer, use o menu ⋮ e escolha “Adicionar à tela inicial”.</p></div></div><button className="primary" onClick={install}>Instalar / ver instruções</button><small>Aplicativo web: não é baixado pela App Store nem pela Play Store.</small></div><div className="privacy-card"><h3>Privacidade e termos</h3><p>Consulte a finalidade dos dados, regras de uso e seus direitos.</p><button onClick={()=>setAccepted(false)}>Ler termos novamente</button></div></section>}
- {openProfile&&<div className="modal-backdrop" onClick={()=>setOpenProfile(null)}><article className="person-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setOpenProfile(null)}>×</button><ProfileAvatar name={openProfile} profiles={profiles}/><h2>{openProfile}</h2><p>Participante da equipe de música da IASD Jardim Brasil.</p></article></div>}
- {accepted===false&&<div className="modal-backdrop legal"><article className="terms-modal"><p className="eyebrow">PRIMEIRO ACESSO</p><h2>Termos de uso e privacidade</h2><div className="terms-copy"><p>Este aplicativo organiza escalas, materiais musicais, perfis e lembretes da equipe de música da IASD Jardim Brasil.</p><ul><li>Serão tratados nome, função, foto opcional, telefone para alertas, registros de aceite e materiais enviados.</li><li>Os dados serão usados somente para organizar a escala, identificar participantes, disponibilizar materiais e enviar lembretes.</li><li>Não envie conteúdo sensível, ilegal ou protegido sem autorização. Quem adiciona um arquivo ou link declara ter permissão para compartilhá-lo.</li><li>Fotos são opcionais e ficarão visíveis aos participantes com acesso ao aplicativo.</li><li>Você pode pedir correção ou exclusão dos seus dados ao administrador da escala.</li></ul><p>Ao continuar, você declara que leu e concorda com estes termos e com o tratamento descrito.</p></div><label className="consent-check"><input type="checkbox" id="consent-box"/> Li e concordo com os Termos de Uso e o Aviso de Privacidade.</label><button className="primary full" onClick={()=>{const el=document.getElementById("consent-box") as HTMLInputElement;if(el?.checked)acceptTerms();else setNotice("Marque a caixa de aceite para continuar.")}}>Aceitar e continuar</button>{notice&&<p className="error-state">{notice}</p>}</article></div>}
- <nav aria-label="Navegação principal"><button className={tab==="scale"?"active":""} onClick={()=>setTab("scale")}><b>▦</b><span>Escala</span></button><button className={tab==="materials"?"active":""} onClick={()=>setTab("materials")}><b>▤</b><span>Materiais</span></button><button className={tab==="profile"?"active":""} onClick={()=>setTab("profile")}><b>♟</b><span>Meu perfil</span></button></nav></main>}
-function MaterialForm({songKey,songTitle,onDone,onCancel}:{songKey:string;songTitle:string;onDone:()=>void;onCancel:()=>void}){const[kind,setKind]=useState("youtube"),[url,setUrl]=useState(""),[file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError("");const d=new FormData();d.set("songKey",songKey);d.set("songTitle",songTitle);d.set("kind",kind);if(kind==="file"&&file)d.set("file",file);else d.set("url",url);const r=await fetch("/api/materials",{method:"POST",body:d});setBusy(false);if(r.ok)onDone();else setError((await r.json()).error||"Não foi possível salvar.")};return <form className="material-form" onSubmit={submit}><label>Tipo<select value={kind} onChange={e=>setKind(e.target.value)}><option value="youtube">Vídeo do YouTube</option><option value="link">Link de cifra</option><option value="file">PDF ou imagem</option></select></label>{kind==="file"?<label>Arquivo<input type="file" accept="application/pdf,image/jpeg,image/png" required onChange={e=>setFile(e.target.files?.[0]||null)}/></label>:<label>Link<input type="url" required placeholder="https://…" value={url} onChange={e=>setUrl(e.target.value)}/></label>}{error&&<small className="form-error">{error}</small>}<div><button type="button" onClick={onCancel}>Cancelar</button><button className="primary" disabled={busy}>{busy?"Salvando…":"Salvar"}</button></div></form>}
-function ServiceCard({service,selected,materials,profiles,onProfile}:{service:Service;selected:string;materials:Material[];profiles:Profile[];onProfile:(n:string)=>void}){const mine=isMine(service,selected),groups=[{title:"Audiovisual",value:service.audiovisual},{title:"Cantores",value:service.singers},{title:"Instrumental",value:service.instruments}];return <article className={mine?"service mine":"service"}>{mine&&<div className="tag">VOCÊ ESTÁ ESCALADO</div>}<div className="date"><strong>{String(service.day).padStart(2,"0")}</strong><span>{service.monthLabel}</span></div><div className="details"><h3>{service.label}</h3><div className="times"><span><b>Início</b>{service.time}</span><span className="arrival"><b>{service.arrivalLabel}</b>{service.arrival}</span></div>{service.note&&<p className="notice">{service.note}</p>}{groups.map(g=><div className="team-group" key={g.title}><h4>{g.title}</h4><div className="chips">{g.value.split("/").map((m,i)=>{const n=m.trim();return <button type="button" className={normalize(n)===normalize(selected)?"person-chip you":"person-chip"} key={`${m}-${i}`} onClick={()=>onProfile(n)}><ProfileAvatar name={n} profiles={profiles}/>{n}</button>})}</div></div>)}<h4>Músicas do dia</h4><ol>{service.songs.map((song,i)=>{const clean=song.replace(/^\d+\s*-\s*/,"").trim(),youtube=materials.find(m=>m.songKey===normalize(clean)&&m.kind==="youtube");return <li key={`${song}-${i}`}>{youtube?<a className="song-play" href={youtube.url} target="_blank" rel="noreferrer">{song} <span>▶ Ouvir</span></a>:song}</li>})}</ol></div></article>}
-function ProfileAvatar({name,profiles}:{name:string;profiles:Profile[]}){const photo=profiles.find(p=>normalize(p.name)===normalize(name))?.photoUrl;return photo?<img className="avatar photo" src={photo} alt={`Foto de ${name}`}/>:<div className="avatar small">{name.slice(0,3).toUpperCase()}</div>}
-function ProfilePhotoForm({name,onDone}:{name:string;onDone:()=>void}){const[file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false),[msg,setMsg]=useState("");const send=async()=>{if(!file)return;setBusy(true);const d=new FormData();d.set("name",name);d.set("file",file);const r=await fetch("/api/profiles",{method:"POST",body:d});setBusy(false);setMsg(r.ok?"Foto atualizada.":"Não foi possível salvar a foto.");if(r.ok)onDone()};return <div className="photo-form"><label>Foto do perfil (opcional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><button className="primary" disabled={!file||busy} onClick={send}>{busy?"Enviando…":"Salvar foto"}</button>{msg&&<small>{msg}</small>}</div>}
+type Service = {
+  id: string;
+  date: string;
+  day: number;
+  monthLabel: string;
+  label: string;
+  time: string;
+  arrival: string;
+  arrivalLabel: string;
+  audiovisual: string;
+  singers: string;
+  instruments: string;
+  songs: string[];
+  note?: string;
+};
+type Month = { key: string; label: string; services: Service[] };
+type Material = {
+  id: number;
+  songKey: string;
+  songTitle: string;
+  kind: string;
+  label: string;
+  url?: string;
+  createdAt: string;
+};
+type Profile = { name: string; photoUrl?: string };
+type AvailabilityCampaign = {
+  id: number;
+  monthKey: string;
+  monthLabel: string;
+  deadline: string;
+  active: number;
+  response?: string[];
+};
+const PILOT = "PHK";
+const normalize = (v: string) =>
+  v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+const wordDistance = (a: string, b: string) => {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const old = row[j];
+      row[j] = Math.min(
+        row[j] + 1,
+        row[j - 1] + 1,
+        prev + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      prev = old;
+    }
+  }
+  return row[b.length];
+};
+const isMine = (s: Service, p: string) => {
+  const h = normalize(`${s.audiovisual} / ${s.singers} / ${s.instruments}`);
+  const n = normalize(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Z0-9])${n}([^A-Z0-9]|$)`).test(h);
+};
+export default function Home() {
+  const [tab, setTab] = useState<"scale" | "materials" | "profile">("scale"),
+    [months, setMonths] = useState<Month[]>([]),
+    [monthKey, setMonthKey] = useState(""),
+    [selected, setSelected] = useState(PILOT),
+    [search, setSearch] = useState(""),
+    [materials, setMaterials] = useState<Material[]>([]),
+    [profiles, setProfiles] = useState<Profile[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [editingSong, setEditingSong] = useState<string | null>(null),
+    [notice, setNotice] = useState(""),
+    [installPrompt, setInstallPrompt] = useState<any>(null),
+    [accepted, setAccepted] = useState<boolean | null>(null),
+    [openProfile, setOpenProfile] = useState<string | null>(null),
+    [campaign, setCampaign] = useState<AvailabilityCampaign | null>(null),
+    [availabilityOpen, setAvailabilityOpen] = useState(false);
+  useEffect(() => {
+    const saved = localStorage.getItem("escala-jb-person") || PILOT;
+    setSelected(saved);
+    setAccepted(localStorage.getItem("escala-jb-terms") === "1");
+    const onInstall = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", onInstall);
+    Promise.all([
+      fetch("/api/schedule").then((r) => (r.ok ? r.json() : Promise.reject())),
+      fetch("/api/materials")
+        .then((r) => (r.ok ? r.json() : { materials: [] }))
+        .catch(() => ({ materials: [] })),
+      fetch("/api/profiles")
+        .then((r) => (r.ok ? r.json() : { profiles: [] }))
+        .catch(() => ({ profiles: [] })),
+      fetch(`/api/availability?profile=${encodeURIComponent(saved)}`)
+        .then((r) => (r.ok ? r.json() : { campaign: null }))
+        .catch(() => ({ campaign: null })),
+    ])
+      .then(([d, m, p, a]) => {
+        setMonths(d.months || []);
+        setMonthKey(d.defaultMonth || d.months?.[0]?.key || "");
+        setMaterials(m.materials || []);
+        setProfiles(p.profiles || []);
+        setCampaign(a.campaign || null);
+        if (a.campaign && !a.campaign.response) setAvailabilityOpen(true);
+      })
+      .catch(() =>
+        setError(
+          "Não foi possível atualizar a escala agora. Tente novamente em instantes.",
+        ),
+      )
+      .finally(() => setLoading(false));
+    return () => window.removeEventListener("beforeinstallprompt", onInstall);
+  }, []);
+  const month = months.find((m) => m.key === monthKey) || months[0],
+    services = month?.services || [],
+    mine = useMemo(
+      () => services.filter((s) => isMine(s, selected)),
+      [services, selected],
+    );
+  const songCatalog = useMemo(() => {
+    const map = new Map<string, { title: string; count: number }>();
+    months.forEach((m) =>
+      m.services.forEach((s) =>
+        s.songs.forEach((title) => {
+          const clean = title.replace(/^\d+\s*-\s*/, "").trim(),
+            key = normalize(clean);
+          if (!key || key.includes("NAO HAVERA") || key.includes("JA EIC"))
+            return;
+          map.set(key, { title: clean, count: (map.get(key)?.count || 0) + 1 });
+        }),
+      ),
+    );
+    return [...map.entries()].sort((a, b) =>
+      a[1].title.localeCompare(b[1].title, "pt-BR"),
+    );
+  }, [months]);
+  const songs = useMemo(
+    () =>
+      songCatalog.filter(
+        ([, s]) => !search || normalize(s.title).includes(normalize(search)),
+      ),
+    [songCatalog, search],
+  );
+  const suggestion = useMemo(() => {
+    if (!search || songs.length) return null;
+    const q = normalize(search),
+      ranked = songCatalog
+        .map(([, s]) => ({
+          title: s.title,
+          score: wordDistance(q, normalize(s.title)),
+        }))
+        .sort((a, b) => a.score - b.score);
+    return ranked[0] &&
+      ranked[0].score <= Math.max(3, Math.floor(q.length * 0.4))
+      ? ranked[0].title
+      : null;
+  }, [search, songs.length, songCatalog]);
+  const people = useMemo(() => {
+    const set = new Set<string>([PILOT]);
+    months.forEach((m) =>
+      m.services.forEach((s) =>
+        [s.audiovisual, s.singers, s.instruments].forEach((v) =>
+          v
+            .split("/")
+            .map((x) => x.trim())
+            .filter((x) => x && x !== "-")
+            .forEach((x) => set.add(x)),
+        ),
+      ),
+    );
+    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [months]);
+  const choose = (p: string) => {
+      setSelected(p);
+      localStorage.setItem("escala-jb-person", p);
+    },
+    enableNotifications = async () => {
+      if (!("Notification" in window)) {
+        setNotice("Este navegador não oferece notificações.");
+        return;
+      }
+      const r = await Notification.requestPermission();
+      setNotice(
+        r === "granted"
+          ? "Notificações autorizadas neste aparelho."
+          : "Permissão de notificações não concedida.",
+      );
+    },
+    refreshMaterials = () =>
+      fetch("/api/materials")
+        .then((r) => r.json())
+        .then((d) => setMaterials(d.materials || [])),
+    refreshProfiles = () =>
+      fetch("/api/profiles")
+        .then((r) => r.json())
+        .then((d) => setProfiles(d.profiles || []));
+  const openSong = (title: string) => {
+    setSearch(title.replace(/^\d+\s*-\s*/, "").trim());
+    setTab("materials");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const acceptTerms = async () => {
+    localStorage.setItem("escala-jb-terms", "1");
+    setAccepted(true);
+    await fetch("/api/consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile: selected, version: "1.0" }),
+    }).catch(() => {});
+  };
+  const install = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      setInstallPrompt(null);
+    } else
+      setNotice(
+        "No iPhone: Safari › Compartilhar › Adicionar à Tela de Início. No Android: Chrome › menu ⋮ › Instalar aplicativo.",
+      );
+  };
+  return (
+    <main>
+      <header className="topbar">
+        <div className="brand">
+          <span>♫</span>
+          <div>
+            <strong>Escala de Música JB</strong>
+            <small>IASD Jardim Brasil</small>
+          </div>
+        </div>
+        <button
+          className="bell"
+          onClick={enableNotifications}
+          aria-label="Ativar notificações"
+        >
+          ●
+        </button>
+      </header>
+      <section className="intro">
+        <div>
+          <p className="eyebrow">
+            {tab === "materials"
+              ? "BIBLIOTECA PERMANENTE"
+              : month?.label || "ESCALA OFICIAL"}
+          </p>
+          <h1>
+            {tab === "scale"
+              ? `Olá, ${selected}!`
+              : tab === "materials"
+                ? "Materiais"
+                : "Meu perfil"}
+          </h1>
+          <p>
+            {tab === "scale"
+              ? "Veja a escala completa. Seus dias estão destacados em azul."
+              : tab === "materials"
+                ? "Vídeos, cifras, fotos e partituras organizados por música."
+                : "Identificação e preferências do piloto de alertas."}
+          </p>
+        </div>
+        {tab === "scale" && (
+          <div className="intro-controls">
+            <label>
+              Mês
+              <select
+                value={monthKey}
+                onChange={(e) => setMonthKey(e.target.value)}
+              >
+                {months.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Quem está consultando?
+              <select value={selected} onChange={(e) => choose(e.target.value)}>
+                {people.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+      </section>
+      {loading && (
+        <section className="content">
+          <p className="empty-state">Atualizando a planilha oficial…</p>
+        </section>
+      )}
+      {error && (
+        <section className="content">
+          <p className="error-state">{error}</p>
+        </section>
+      )}
+      {!loading && !error && tab === "scale" && (
+        <>
+          <section className="summary">
+            <div>
+              <strong>{mine.length}</strong>
+              <span>programações para você</span>
+            </div>
+            <div>
+              <strong>{services.length}</strong>
+              <span>programações no mês</span>
+            </div>
+            <div>
+              <strong>2</strong>
+              <span>lembretes por escala</span>
+            </div>
+          </section>
+          <section className="content">
+            {campaign && (
+              <button
+                className="availability-banner"
+                onClick={() => setAvailabilityOpen(true)}
+              >
+                📅 Informe sua indisponibilidade para {campaign.monthLabel}
+              </button>
+            )}
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">ESCALA OFICIAL</p>
+                <h2>Todas as programações</h2>
+              </div>
+              <span className="legend">
+                <i /> Sua escala
+              </span>
+            </div>
+            <div className="calendar">
+              {services.map((s) => (
+                <ServiceCard
+                  key={s.id}
+                  service={s}
+                  selected={selected}
+                  materials={materials}
+                  profiles={profiles}
+                  onProfile={setOpenProfile}
+                  onSong={openSong}
+                />
+              ))}
+            </div>
+            <p className="source-note">
+              Atualização automática a partir da planilha oficial.
+            </p>
+          </section>
+        </>
+      )}
+      {tab === "materials" && (
+        <section className="content">
+          <div className="materials-toolbar">
+            <label htmlFor="search">Buscar uma música</label>
+            <input
+              id="search"
+              type="search"
+              placeholder="Ex.: Bondade de Deus"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {suggestion && (
+            <div className="spelling-suggestion">
+              Não encontramos “{search}”. Você quis dizer{" "}
+              <button onClick={() => setSearch(suggestion)}>
+                {suggestion}
+              </button>
+              ?
+            </div>
+          )}
+          <div className="materials-note">
+            <span>♪</span>
+            <div>
+              <strong>Uma música, um único cadastro</strong>
+              <p>
+                O material continua disponível mesmo quando a música volta em
+                outro mês.
+              </p>
+            </div>
+          </div>
+          <div className="materials-grid">
+            {songs.map(([key, song]) => {
+              const linked = materials.filter((m) => m.songKey === key),
+                youtube = linked.find((m) => m.kind === "youtube");
+              return (
+                <article className="material-card" key={key}>
+                  <div className="material-icon">♫</div>
+                  <div className="material-body">
+                    <h3>{song.title}</h3>
+                    <p>
+                      {song.count > 1
+                        ? `Aparece ${song.count} vezes nas escalas disponíveis`
+                        : "Presente na escala"}
+                    </p>
+                    {youtube && (
+                      <a
+                        className="play-button"
+                        href={youtube.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        ▶ Tocar no YouTube
+                      </a>
+                    )}
+                    {linked.length ? (
+                      <div className="material-links">
+                        {linked
+                          .filter((m) => m.id !== youtube?.id)
+                          .map((m) => (
+                            <span className="material-link" key={m.id}>
+                              <a
+                                href={
+                                  m.kind === "file"
+                                    ? `/api/materials/file?id=${m.id}`
+                                    : m.url
+                                }
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {m.label}
+                              </a>
+                              <button
+                                aria-label={`Remover ${m.label}`}
+                                onClick={async () => {
+                                  if (confirm("Remover este material?")) {
+                                    await fetch(`/api/materials?id=${m.id}`, {
+                                      method: "DELETE",
+                                    });
+                                    refreshMaterials();
+                                  }
+                                }}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                      </div>
+                    ) : (
+                      <span className="material-status">
+                        Aguardando material
+                      </span>
+                    )}
+                    <button
+                      className="add-material"
+                      onClick={() => setEditingSong(key)}
+                    >
+                      + Adicionar material
+                    </button>
+                    {editingSong === key && (
+                      <MaterialForm
+                        songKey={key}
+                        songTitle={song.title}
+                        onDone={() => {
+                          setEditingSong(null);
+                          refreshMaterials();
+                        }}
+                        onCancel={() => setEditingSong(null)}
+                      />
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {tab === "profile" && (
+        <section className="content">
+          <article className="profile-card">
+            <ProfileAvatar name={selected} profiles={profiles} />
+            <div>
+              <p className="eyebrow">PERFIL SELECIONADO</p>
+              <h2>{selected}</h2>
+              <p>
+                {selected === PILOT
+                  ? "Músico / Sonoplastia"
+                  : "Participante da equipe de música"}
+              </p>
+            </div>
+          </article>
+          <ProfilePhotoForm name={selected} onDone={refreshProfiles} />
+          <div className="profile-grid">
+            <article>
+              <h3>WhatsApp</h3>
+              <p>
+                {selected === PILOT
+                  ? "••••• ••••-7368"
+                  : "Ainda não cadastrado"}
+              </p>
+              <small>O número não fica visível aos demais usuários.</small>
+            </article>
+            <article>
+              <h3>Lembretes</h3>
+              <p>24 horas e 2 horas antes</p>
+              <small>
+                Incluem culto, chegada, função, músicas e materiais.
+              </small>
+            </article>
+            <article>
+              <h3>Notificações</h3>
+              <p>Este aparelho</p>
+              <button className="primary" onClick={enableNotifications}>
+                Ativar notificações
+              </button>
+            </article>
+          </div>
+          {notice && <p className="success-state">{notice}</p>}
+          <div className="install-card">
+            <h3>Instalar no celular</h3>
+            <div className="install-options">
+              <div>
+                <strong>iPhone / iPad</strong>
+                <p>
+                  Abra no Safari, toque em Compartilhar e escolha “Adicionar à
+                  Tela de Início”. A Apple exige esses toques e não permite
+                  instalação automática por link.
+                </p>
+              </div>
+              <div>
+                <strong>Android</strong>
+                <p>
+                  Abra no Chrome e toque em “Instalar aplicativo”. Se o botão
+                  não aparecer, use o menu ⋮ e escolha “Adicionar à tela
+                  inicial”.
+                </p>
+              </div>
+            </div>
+            <button className="primary" onClick={install}>
+              Instalar / ver instruções
+            </button>
+            <small>
+              Aplicativo web: não é baixado pela App Store nem pela Play Store.
+            </small>
+          </div>
+          <div className="privacy-card">
+            <h3>Privacidade e termos</h3>
+            <p>
+              Consulte a finalidade dos dados, regras de uso e seus direitos.
+            </p>
+            <button onClick={() => setAccepted(false)}>
+              Ler termos novamente
+            </button>
+          </div>
+        </section>
+      )}
+      {selected === PILOT && tab === "profile" && (
+        <AvailabilityAdmin
+          onStarted={(next) => {
+            setCampaign(next);
+            setAvailabilityOpen(true);
+          }}
+        />
+      )}
+      {campaign && availabilityOpen && (
+        <AvailabilityModal
+          campaign={campaign}
+          profile={selected}
+          onClose={() => setAvailabilityOpen(false)}
+          onSaved={(dates) => setCampaign({ ...campaign, response: dates })}
+        />
+      )}
+      {openProfile && (
+        <div className="modal-backdrop" onClick={() => setOpenProfile(null)}>
+          <article
+            className="person-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="modal-close"
+              onClick={() => setOpenProfile(null)}
+            >
+              ×
+            </button>
+            <ProfileAvatar name={openProfile} profiles={profiles} />
+            <h2>{openProfile}</h2>
+            <p>Participante da equipe de música da IASD Jardim Brasil.</p>
+          </article>
+        </div>
+      )}
+      {accepted === false && (
+        <div className="modal-backdrop legal">
+          <article className="terms-modal">
+            <p className="eyebrow">PRIMEIRO ACESSO</p>
+            <h2>Termos de uso e privacidade</h2>
+            <div className="terms-copy">
+              <p>
+                Este aplicativo organiza escalas, materiais musicais, perfis e
+                lembretes da equipe de música da IASD Jardim Brasil.
+              </p>
+              <ul>
+                <li>
+                  Serão tratados nome, função, foto opcional, telefone para
+                  alertas, registros de aceite e materiais enviados.
+                </li>
+                <li>
+                  Os dados serão usados somente para organizar a escala,
+                  identificar participantes, disponibilizar materiais e enviar
+                  lembretes.
+                </li>
+                <li>
+                  Não envie conteúdo sensível, ilegal ou protegido sem
+                  autorização. Quem adiciona um arquivo ou link declara ter
+                  permissão para compartilhá-lo.
+                </li>
+                <li>
+                  Fotos são opcionais e ficarão visíveis aos participantes com
+                  acesso ao aplicativo.
+                </li>
+                <li>
+                  Você pode pedir correção ou exclusão dos seus dados ao
+                  administrador da escala.
+                </li>
+              </ul>
+              <p>
+                Ao continuar, você declara que leu e concorda com estes termos e
+                com o tratamento descrito.
+              </p>
+            </div>
+            <label className="consent-check">
+              <input type="checkbox" id="consent-box" /> Li e concordo com os
+              Termos de Uso e o Aviso de Privacidade.
+            </label>
+            <button
+              className="primary full"
+              onClick={() => {
+                const el = document.getElementById(
+                  "consent-box",
+                ) as HTMLInputElement;
+                if (el?.checked) acceptTerms();
+                else setNotice("Marque a caixa de aceite para continuar.");
+              }}
+            >
+              Aceitar e continuar
+            </button>
+            {notice && <p className="error-state">{notice}</p>}
+          </article>
+        </div>
+      )}
+      <nav aria-label="Navegação principal">
+        <button
+          className={tab === "scale" ? "active" : ""}
+          onClick={() => setTab("scale")}
+        >
+          <b>▦</b>
+          <span>Escala</span>
+        </button>
+        <button
+          className={tab === "materials" ? "active" : ""}
+          onClick={() => setTab("materials")}
+        >
+          <b>▤</b>
+          <span>Materiais</span>
+        </button>
+        <button
+          className={tab === "profile" ? "active" : ""}
+          onClick={() => setTab("profile")}
+        >
+          <b>♟</b>
+          <span>Meu perfil</span>
+        </button>
+      </nav>
+    </main>
+  );
+}
+function MaterialForm({
+  songKey,
+  songTitle,
+  onDone,
+  onCancel,
+}: {
+  songKey: string;
+  songTitle: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [kind, setKind] = useState("youtube"),
+    [url, setUrl] = useState(""),
+    [file, setFile] = useState<File | null>(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const d = new FormData();
+    d.set("songKey", songKey);
+    d.set("songTitle", songTitle);
+    d.set("kind", kind);
+    if (kind === "file" && file) d.set("file", file);
+    else d.set("url", url);
+    const r = await fetch("/api/materials", { method: "POST", body: d });
+    setBusy(false);
+    if (r.ok) onDone();
+    else setError((await r.json()).error || "Não foi possível salvar.");
+  };
+  return (
+    <form className="material-form" onSubmit={submit}>
+      <label>
+        Tipo
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          <option value="youtube">Vídeo do YouTube</option>
+          <option value="link">Link de cifra</option>
+          <option value="file">PDF ou imagem</option>
+        </select>
+      </label>
+      {kind === "file" ? (
+        <label>
+          Arquivo
+          <input
+            type="file"
+            accept="application/pdf,image/jpeg,image/png"
+            required
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+          />
+        </label>
+      ) : (
+        <label>
+          Link
+          <input
+            type="url"
+            required
+            placeholder="https://…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </label>
+      )}
+      {error && <small className="form-error">{error}</small>}
+      <div>
+        <button type="button" onClick={onCancel}>
+          Cancelar
+        </button>
+        <button className="primary" disabled={busy}>
+          {busy ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+function ServiceCard({
+  service,
+  selected,
+  materials,
+  profiles,
+  onProfile,
+  onSong,
+}: {
+  service: Service;
+  selected: string;
+  materials: Material[];
+  profiles: Profile[];
+  onProfile: (n: string) => void;
+  onSong: (title: string) => void;
+}) {
+  const mine = isMine(service, selected),
+    groups = [
+      { title: "Audiovisual", value: service.audiovisual },
+      { title: "Cantores", value: service.singers },
+      { title: "Instrumental", value: service.instruments },
+    ];
+  return (
+    <article className={mine ? "service mine" : "service"}>
+      {mine && <div className="tag">VOCÊ ESTÁ ESCALADO</div>}
+      <div className="date">
+        <strong>{String(service.day).padStart(2, "0")}</strong>
+        <span>{service.monthLabel}</span>
+      </div>
+      <div className="details">
+        <h3>{service.label}</h3>
+        <div className="times">
+          <span>
+            <b>Início</b>
+            {service.time}
+          </span>
+          <span className="arrival">
+            <b>{service.arrivalLabel}</b>
+            {service.arrival}
+          </span>
+        </div>
+        {service.note && <p className="notice">{service.note}</p>}
+        {groups.map((g) => (
+          <div className="team-group" key={g.title}>
+            <h4>{g.title}</h4>
+            <div className="chips">
+              {g.value.split("/").map((m, i) => {
+                const n = m.trim();
+                return (
+                  <button
+                    type="button"
+                    className={
+                      normalize(n) === normalize(selected)
+                        ? "person-chip you"
+                        : "person-chip"
+                    }
+                    key={`${m}-${i}`}
+                    onClick={() => onProfile(n)}
+                  >
+                    <ProfileAvatar name={n} profiles={profiles} />
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <h4>Músicas do dia</h4>
+        <ol>
+          {service.songs.map((song, i) => {
+            const clean = song.replace(/^\d+\s*-\s*/, "").trim(),
+              youtube = materials.find(
+                (m) => m.songKey === normalize(clean) && m.kind === "youtube",
+              );
+            return (
+              <li key={`${song}-${i}`}>
+                <button className="song-library" onClick={() => onSong(clean)}>
+                  {song} <span>Ver materiais</span>
+                </button>
+                {youtube && (
+                  <a
+                    className="song-play"
+                    href={youtube.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span>▶ Ouvir</span>
+                  </a>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </article>
+  );
+}
+function AvailabilityAdmin({
+  onStarted,
+}: {
+  onStarted: (c: AvailabilityCampaign) => void;
+}) {
+  const now = new Date(),
+    next = new Date(now.getFullYear(), now.getMonth() + 1, 1),
+    monthKey = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`,
+    [deadline, setDeadline] = useState(
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-25`,
+    ),
+    [busy, setBusy] = useState(false);
+  const start = async () => {
+    setBusy(true);
+    const r = await fetch("/api/availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start", monthKey, deadline }),
+    });
+    setBusy(false);
+    if (r.ok) onStarted((await r.json()).campaign);
+  };
+  return (
+    <section className="content admin-availability">
+      <article>
+        <p className="eyebrow">DIRETORIA</p>
+        <h3>Indisponibilidade do próximo mês</h3>
+        <p>
+          Ao abrir a solicitação, todos verão um pop-up para marcar quartas,
+          domingos e os dois períodos de sábado.
+        </p>
+        <label>
+          Responder até
+          <input
+            type="date"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+          />
+        </label>
+        <button className="primary" disabled={busy} onClick={start}>
+          {busy ? "Abrindo…" : "Solicitar indisponibilidades"}
+        </button>
+      </article>
+    </section>
+  );
+}
+function AvailabilityModal({
+  campaign,
+  profile,
+  onClose,
+  onSaved,
+}: {
+  campaign: AvailabilityCampaign;
+  profile: string;
+  onClose: () => void;
+  onSaved: (d: string[]) => void;
+}) {
+  const [y, m] = campaign.monthKey.split("-").map(Number),
+    last = new Date(y, m, 0).getDate(),
+    options: { key: string; label: string }[] = [];
+  for (let d = 1; d <= last; d++) {
+    const day = new Date(y, m - 1, d).getDay(),
+      date = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (day === 3)
+      options.push({
+        key: `${date}|quarta`,
+        label: `${String(d).padStart(2, "0")} — Quarta-feira`,
+      });
+    if (day === 0)
+      options.push({
+        key: `${date}|domingo`,
+        label: `${String(d).padStart(2, "0")} — Domingo`,
+      });
+    if (day === 6) {
+      options.push({
+        key: `${date}|sabado-manha`,
+        label: `${String(d).padStart(2, "0")} — Sábado de manhã`,
+      });
+      options.push({
+        key: `${date}|ja`,
+        label: `${String(d).padStart(2, "0")} — Sábado à tarde (Culto Jovem)`,
+      });
+    }
+  }
+  const [selectedDates, setSelectedDates] = useState<string[]>(
+      campaign.response || [],
+    ),
+    [busy, setBusy] = useState(false),
+    toggle = (k: string) =>
+      setSelectedDates((v) =>
+        v.includes(k) ? v.filter((x) => x !== k) : [...v, k],
+      );
+  const save = async () => {
+    setBusy(true);
+    const r = await fetch("/api/availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "respond",
+        campaignId: campaign.id,
+        profile,
+        dates: selectedDates,
+      }),
+    });
+    setBusy(false);
+    if (r.ok) {
+      onSaved(selectedDates);
+      onClose();
+    }
+  };
+  return (
+    <div className="modal-backdrop">
+      <article className="availability-modal">
+        <button className="modal-close" onClick={onClose}>
+          ×
+        </button>
+        <p className="eyebrow">ESCALA DO PRÓXIMO MÊS</p>
+        <h2>Informe sua indisponibilidade</h2>
+        <p>
+          Selecione somente os dias e períodos em que você{" "}
+          <strong>não poderá estar presente</strong> em {campaign.monthLabel}.
+          Responda até{" "}
+          {new Date(`${campaign.deadline}T12:00:00`).toLocaleDateString(
+            "pt-BR",
+          )}
+          .
+        </p>
+        <div className="availability-days">
+          {options.map((o) => (
+            <label
+              className={selectedDates.includes(o.key) ? "selected" : ""}
+              key={o.key}
+            >
+              <input
+                type="checkbox"
+                checked={selectedDates.includes(o.key)}
+                onChange={() => toggle(o.key)}
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+        <button className="primary full" disabled={busy} onClick={save}>
+          {busy ? "Salvando…" : "Salvar indisponibilidade"}
+        </button>
+      </article>
+    </div>
+  );
+}
+function ProfileAvatar({
+  name,
+  profiles,
+}: {
+  name: string;
+  profiles: Profile[];
+}) {
+  const photo = profiles.find(
+    (p) => normalize(p.name) === normalize(name),
+  )?.photoUrl;
+  return photo ? (
+    <img className="avatar photo" src={photo} alt={`Foto de ${name}`} />
+  ) : (
+    <div className="avatar small">{name.slice(0, 3).toUpperCase()}</div>
+  );
+}
+function ProfilePhotoForm({
+  name,
+  onDone,
+}: {
+  name: string;
+  onDone: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null),
+    [busy, setBusy] = useState(false),
+    [msg, setMsg] = useState("");
+  const send = async () => {
+    if (!file) return;
+    setBusy(true);
+    const d = new FormData();
+    d.set("name", name);
+    d.set("file", file);
+    const r = await fetch("/api/profiles", { method: "POST", body: d });
+    setBusy(false);
+    setMsg(r.ok ? "Foto atualizada." : "Não foi possível salvar a foto.");
+    if (r.ok) onDone();
+  };
+  return (
+    <div className="photo-form">
+      <label>
+        Foto do perfil (opcional)
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => setFile(e.target.files?.[0] || null)}
+        />
+      </label>
+      <button className="primary" disabled={!file || busy} onClick={send}>
+        {busy ? "Enviando…" : "Salvar foto"}
+      </button>
+      {msg && <small>{msg}</small>}
+    </div>
+  );
+}
