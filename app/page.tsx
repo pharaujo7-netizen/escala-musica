@@ -79,7 +79,12 @@ export default function Home() {
     [accepted, setAccepted] = useState<boolean | null>(null),
     [openProfile, setOpenProfile] = useState<string | null>(null),
     [campaign, setCampaign] = useState<AvailabilityCampaign | null>(null),
-    [availabilityOpen, setAvailabilityOpen] = useState(false);
+    [availabilityOpen, setAvailabilityOpen] = useState(false),
+    [scaleReturn, setScaleReturn] = useState<{
+      monthKey: string;
+      serviceId: string;
+      scrollY: number;
+    } | null>(null);
   useEffect(() => {
     const saved = localStorage.getItem("escala-jb-person") || PILOT;
     setSelected(saved);
@@ -200,10 +205,25 @@ export default function Home() {
       fetch("/api/profiles")
         .then((r) => r.json())
         .then((d) => setProfiles(d.profiles || []));
-  const openSong = (title: string) => {
+  const openSong = (title: string, serviceId: string) => {
+    setScaleReturn({ monthKey, serviceId, scrollY: window.scrollY });
     setSearch(title.replace(/^\d+\s*-\s*/, "").trim());
     setTab("materials");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const returnToScale = () => {
+    const origin = scaleReturn;
+    if (origin) setMonthKey(origin.monthKey);
+    setTab("scale");
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        const service = origin
+          ? document.getElementById(`service-${origin.serviceId}`)
+          : null;
+        if (service) service.scrollIntoView({ block: "center" });
+        else window.scrollTo({ top: origin?.scrollY || 0 });
+      }),
+    );
   };
   const acceptTerms = async () => {
     localStorage.setItem("escala-jb-terms", "1");
@@ -354,6 +374,11 @@ export default function Home() {
       )}
       {tab === "materials" && (
         <section className="content">
+          {scaleReturn && (
+            <button className="back-to-scale" onClick={returnToScale}>
+              ← Voltar para a escala
+            </button>
+          )}
           <div className="materials-toolbar">
             <label htmlFor="search">Buscar uma música</label>
             <input
@@ -755,7 +780,7 @@ function ServiceCard({
   materials: Material[];
   profiles: Profile[];
   onProfile: (n: string) => void;
-  onSong: (title: string) => void;
+  onSong: (title: string, serviceId: string) => void;
 }) {
   const mine = isMine(service, selected),
     groups = [
@@ -764,7 +789,10 @@ function ServiceCard({
       { title: "Instrumental", value: service.instruments },
     ];
   return (
-    <article className={mine ? "service mine" : "service"}>
+    <article
+      id={`service-${service.id}`}
+      className={mine ? "service mine" : "service"}
+    >
       {mine && <div className="tag">VOCÊ ESTÁ ESCALADO</div>}
       <div className="date">
         <strong>{String(service.day).padStart(2, "0")}</strong>
@@ -817,7 +845,10 @@ function ServiceCard({
               );
             return (
               <li key={`${song}-${i}`}>
-                <button className="song-library" onClick={() => onSong(clean)}>
+                <button
+                  className="song-library"
+                  onClick={() => onSong(clean, service.id)}
+                >
                   {song} <span>Ver materiais</span>
                 </button>
                 {youtube && (

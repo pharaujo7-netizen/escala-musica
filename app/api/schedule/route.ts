@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+const SUNDAY_SERVICE_TIME="19:00";
 export const dynamic="force-dynamic";
 const SHEET="https://docs.google.com/spreadsheets/d/135jibDGmn0r6prjmQfOwnkRYFIeQ114Zfjdfwaa_F4Q/export?format=xlsx";
 const MONTHS=["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO","JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"];
@@ -19,7 +20,7 @@ function timeFor(date:Date,isJA:boolean,values:string[]){
       :day===6
         ?{label:"Sábado de manhã",time:"09:00"}
         :day===0
-          ?{label:"Domingo",time:"19:00"}
+          ?{label:"Domingo",time:SUNDAY_SERVICE_TIME}
           :{label:"Programação",time:"A confirmar"};
   if(service.time==="A confirmar")return{...service,arrival:"A confirmar",arrivalLabel:"Chegada"};
   const instrumental=values[2]?.trim()||"";

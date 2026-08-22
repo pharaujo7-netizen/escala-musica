@@ -2,6 +2,20 @@
   max-width: 520px;
   margin-bottom: 16px;
 }
+.back-to-scale {
+  margin: 0 0 16px;
+  padding: 11px 15px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.back-to-scale:focus-visible {
+  outline: 3px solid #a8ccff;
+  outline-offset: 2px;
+}
 .materials-toolbar label {
   display: block;
   margin-bottom: 8px;
