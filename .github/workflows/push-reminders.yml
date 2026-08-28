@@ -1,0 +1,19 @@
+name: Enviar lembretes da escala
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Acionar notificações pendentes
+        run: |
+          curl --fail --silent --show-error --retry 2 \
+            "https://escala-musica-jardim-brasil.pharaujo7.chatgpt.site/api/push/dispatch"
