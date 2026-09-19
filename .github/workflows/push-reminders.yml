@@ -2,18 +2,25 @@ name: Enviar lembretes da escala
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # A rotina verifica somente uma janela curta após o horário exato.
+    # O deslocamento de 2 minutos evita a maior fila do GitHub no minuto 00.
+    - cron: "2-57/5 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: escala-musica-push-reminders
+  cancel-in-progress: false
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Acionar notificações pendentes
+      - name: Acionar notificações no horário
         run: |
-          curl --fail --silent --show-error --retry 2 \
+          curl --fail --silent --show-error --retry 2 --retry-all-errors \
+            --max-time 60 \
             "https://escala-musica-jardim-brasil.pharaujo7.chatgpt.site/api/push/dispatch"
