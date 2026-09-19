@@ -2,9 +2,8 @@ name: Enviar lembretes da escala
 
 on:
   schedule:
-    # A rotina verifica somente uma janela curta após o horário exato.
-    # O deslocamento de 2 minutos evita a maior fila do GitHub no minuto 00.
-    - cron: "2-57/5 * * * *"
+    # Verificação frequente; a API só envia dentro da janela curta do horário devido.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
